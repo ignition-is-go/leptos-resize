@@ -54,6 +54,10 @@ pub enum Direction {
     Vertical,
 }
 
+/// DOM id of the per-drag global cursor lock `<style>` element. Public
+/// for advanced consumers that want to coordinate; not normally needed.
+pub const GLOBAL_CURSOR_STYLE_ID: &str = "__leptos_resize_cursor_lock";
+
 /// Drag-resize handle component.
 ///
 /// Renders a hover-target wrapper div containing a visible bar. The
@@ -104,6 +108,28 @@ pub fn ResizeHandle(
             .document()
             .expect("document");
 
+        // Inject a global cursor + user-select lock for the duration of
+        // the drag. Keeps the resize cursor consistent even when the
+        // pointer leaves the handle, and prevents text-selection /
+        // iframe-eat-pointer artifacts during drag. Removed on mouseup.
+        let cursor = match dir {
+            Direction::Horizontal => "col-resize",
+            Direction::Vertical => "row-resize",
+        };
+        if document.get_element_by_id(GLOBAL_CURSOR_STYLE_ID).is_none() {
+            if let Ok(style) = document.create_element("style") {
+                let _ = style.set_attribute("id", GLOBAL_CURSOR_STYLE_ID);
+                style.set_text_content(Some(&format!(
+                    "*{{cursor:{}!important;user-select:none!important;}}\
+                     iframe{{pointer-events:none!important;}}",
+                    cursor
+                )));
+                if let Some(head) = document.head() {
+                    let _ = head.append_child(&style);
+                }
+            }
+        }
+
         // Per-drag closure pair, stored in an Rc<RefCell> so the
         // mouseup handler can pull them out and remove the listeners.
         let closures: Rc<
@@ -142,6 +168,9 @@ pub fn ResizeHandle(
                     "mouseup",
                     u.as_ref().unchecked_ref(),
                 );
+            }
+            if let Some(style_el) = doc_for_up.get_element_by_id(GLOBAL_CURSOR_STYLE_ID) {
+                style_el.remove();
             }
             dragging.set(false);
             if let Some(cb) = on_end {
