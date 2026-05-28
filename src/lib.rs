@@ -58,38 +58,28 @@ pub enum Direction {
 /// for advanced consumers that want to coordinate; not normally needed.
 pub const GLOBAL_CURSOR_STYLE_ID: &str = "__leptos_resize_cursor_lock";
 
-/// Drag-resize handle component.
+/// Drag-tracking hook for consumers that want to roll their own
+/// visual element (positioned/styled differently than [`ResizeHandle`]
+/// does) but reuse the same drag loop, dragging-signal, and global
+/// cursor lock behavior.
 ///
-/// Renders a hover-target wrapper div containing a visible bar. The
-/// wrapper carries `lrh lrh-{horizontal,vertical}` classes (plus
-/// `lrh-dragging` while a drag is in progress) and the bar carries
-/// `lrh-bar`. See [`DEFAULT_CSS`] for the bundled stylesheet, which
-/// can be themed via CSS custom properties (see crate-level docs).
+/// Returns a closure that should be attached to the visual element's
+/// `on:mousedown`. The supplied `dragging` signal flips `true` for the
+/// duration of the drag — wire it to your element's `class:dragging`
+/// attribute (or whatever your style system uses) so the bar can stay
+/// highlighted through the whole drag, even when the cursor leaves
+/// the handle bounds.
 ///
-/// All three lifecycle callbacks are optional. Pixel deltas in
-/// `on_move` / `on_end` are signed (negative = cursor moved up/left
-/// from drag-start, positive = down/right).
-#[component]
-pub fn ResizeHandle(
-    /// Drag axis. Static — direction is captured on each drag start.
-    #[prop(into, optional)]
+/// Callbacks are signed pixel deltas from the drag-start position, on
+/// the axis named by `direction` (X for Horizontal, Y for Vertical).
+pub fn use_drag(
+    dragging: RwSignal<bool>,
     direction: Direction,
-    /// Fired on mousedown, just before the drag loop installs its
-    /// document-level listeners. Use this to snapshot whatever state
-    /// you want to add the delta to in `on_move`.
-    #[prop(optional, into)]
     on_start: Option<Callback<()>>,
-    /// Fired on each mousemove during drag. Argument: signed pixel
-    /// delta from the drag-start position.
-    #[prop(optional, into)]
     on_move: Option<Callback<f64>>,
-    /// Fired once on mouseup. Argument: final signed pixel delta.
-    #[prop(optional, into)]
     on_end: Option<Callback<f64>>,
-) -> impl IntoView {
-    let dragging = RwSignal::new(false);
-
-    let on_mousedown = move |ev: MouseEvent| {
+) -> impl Fn(MouseEvent) + Clone + 'static {
+    move |ev: MouseEvent| {
         ev.prevent_default();
 
         let start = match direction {
@@ -108,10 +98,6 @@ pub fn ResizeHandle(
             .document()
             .expect("document");
 
-        // Inject a global cursor + user-select lock for the duration of
-        // the drag. Keeps the resize cursor consistent even when the
-        // pointer leaves the handle, and prevents text-selection /
-        // iframe-eat-pointer artifacts during drag. Removed on mouseup.
         let cursor = match dir {
             Direction::Horizontal => "col-resize",
             Direction::Vertical => "row-resize",
@@ -130,8 +116,6 @@ pub fn ResizeHandle(
             }
         }
 
-        // Per-drag closure pair, stored in an Rc<RefCell> so the
-        // mouseup handler can pull them out and remove the listeners.
         let closures: Rc<
             RefCell<
                 Option<(
@@ -189,7 +173,40 @@ pub fn ResizeHandle(
             .expect("add mouseup");
 
         *closures.borrow_mut() = Some((mousemove_cb, mouseup_cb));
-    };
+    }
+}
+
+/// Drag-resize handle component.
+///
+/// Renders a hover-target wrapper div containing a visible bar. The
+/// wrapper carries `lrh lrh-{horizontal,vertical}` classes (plus
+/// `lrh-dragging` while a drag is in progress) and the bar carries
+/// `lrh-bar`. See [`DEFAULT_CSS`] for the bundled stylesheet, which
+/// can be themed via CSS custom properties (see crate-level docs).
+///
+/// All three lifecycle callbacks are optional. Pixel deltas in
+/// `on_move` / `on_end` are signed (negative = cursor moved up/left
+/// from drag-start, positive = down/right).
+#[component]
+pub fn ResizeHandle(
+    /// Drag axis. Static — direction is captured on each drag start.
+    #[prop(into, optional)]
+    direction: Direction,
+    /// Fired on mousedown, just before the drag loop installs its
+    /// document-level listeners. Use this to snapshot whatever state
+    /// you want to add the delta to in `on_move`.
+    #[prop(optional, into)]
+    on_start: Option<Callback<()>>,
+    /// Fired on each mousemove during drag. Argument: signed pixel
+    /// delta from the drag-start position.
+    #[prop(optional, into)]
+    on_move: Option<Callback<f64>>,
+    /// Fired once on mouseup. Argument: final signed pixel delta.
+    #[prop(optional, into)]
+    on_end: Option<Callback<f64>>,
+) -> impl IntoView {
+    let dragging = RwSignal::new(false);
+    let on_mousedown = use_drag(dragging, direction, on_start, on_move, on_end);
 
     let class = move || {
         let axis = match direction {
