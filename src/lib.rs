@@ -58,6 +58,9 @@ pub enum Direction {
 /// for advanced consumers that want to coordinate; not normally needed.
 pub const GLOBAL_CURSOR_STYLE_ID: &str = "__leptos_resize_cursor_lock";
 
+type MouseClosure = Closure<dyn FnMut(MouseEvent)>;
+type DragClosures = Rc<RefCell<Option<(MouseClosure, MouseClosure)>>>;
+
 /// Drag-tracking hook for consumers that want to roll their own
 /// visual element (positioned/styled differently than [`ResizeHandle`]
 /// does) but reuse the same drag loop, dragging-signal, and global
@@ -116,14 +119,7 @@ pub fn use_drag(
             }
         }
 
-        let closures: Rc<
-            RefCell<
-                Option<(
-                    Closure<dyn FnMut(MouseEvent)>,
-                    Closure<dyn FnMut(MouseEvent)>,
-                )>,
-            >,
-        > = Rc::new(RefCell::new(None));
+        let closures: DragClosures = Rc::new(RefCell::new(None));
 
         let closures_for_up = closures.clone();
         let doc_for_up = document.clone();
@@ -144,14 +140,10 @@ pub fn use_drag(
                 Direction::Vertical => ev.client_y() as f64,
             };
             if let Some((m, u)) = closures_for_up.borrow_mut().take() {
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mousemove",
-                    m.as_ref().unchecked_ref(),
-                );
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mouseup",
-                    u.as_ref().unchecked_ref(),
-                );
+                let _ = doc_for_up
+                    .remove_event_listener_with_callback("mousemove", m.as_ref().unchecked_ref());
+                let _ = doc_for_up
+                    .remove_event_listener_with_callback("mouseup", u.as_ref().unchecked_ref());
             }
             if let Some(style_el) = doc_for_up.get_element_by_id(GLOBAL_CURSOR_STYLE_ID) {
                 style_el.remove();
@@ -163,10 +155,7 @@ pub fn use_drag(
         });
 
         document
-            .add_event_listener_with_callback(
-                "mousemove",
-                mousemove_cb.as_ref().unchecked_ref(),
-            )
+            .add_event_listener_with_callback("mousemove", mousemove_cb.as_ref().unchecked_ref())
             .expect("add mousemove");
         document
             .add_event_listener_with_callback("mouseup", mouseup_cb.as_ref().unchecked_ref())
