@@ -144,14 +144,10 @@ pub fn use_drag(
                 Direction::Vertical => ev.client_y() as f64,
             };
             if let Some((m, u)) = closures_for_up.borrow_mut().take() {
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mousemove",
-                    m.as_ref().unchecked_ref(),
-                );
-                let _ = doc_for_up.remove_event_listener_with_callback(
-                    "mouseup",
-                    u.as_ref().unchecked_ref(),
-                );
+                let _ = doc_for_up
+                    .remove_event_listener_with_callback("mousemove", m.as_ref().unchecked_ref());
+                let _ = doc_for_up
+                    .remove_event_listener_with_callback("mouseup", u.as_ref().unchecked_ref());
             }
             if let Some(style_el) = doc_for_up.get_element_by_id(GLOBAL_CURSOR_STYLE_ID) {
                 style_el.remove();
@@ -163,10 +159,7 @@ pub fn use_drag(
         });
 
         document
-            .add_event_listener_with_callback(
-                "mousemove",
-                mousemove_cb.as_ref().unchecked_ref(),
-            )
+            .add_event_listener_with_callback("mousemove", mousemove_cb.as_ref().unchecked_ref())
             .expect("add mousemove");
         document
             .add_event_listener_with_callback("mouseup", mouseup_cb.as_ref().unchecked_ref())
