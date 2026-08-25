@@ -58,6 +58,9 @@ pub enum Direction {
 /// for advanced consumers that want to coordinate; not normally needed.
 pub const GLOBAL_CURSOR_STYLE_ID: &str = "__leptos_resize_cursor_lock";
 
+type MouseClosure = Closure<dyn FnMut(MouseEvent)>;
+type DragClosures = Rc<RefCell<Option<(MouseClosure, MouseClosure)>>>;
+
 /// Drag-tracking hook for consumers that want to roll their own
 /// visual element (positioned/styled differently than [`ResizeHandle`]
 /// does) but reuse the same drag loop, dragging-signal, and global
@@ -116,14 +119,7 @@ pub fn use_drag(
             }
         }
 
-        let closures: Rc<
-            RefCell<
-                Option<(
-                    Closure<dyn FnMut(MouseEvent)>,
-                    Closure<dyn FnMut(MouseEvent)>,
-                )>,
-            >,
-        > = Rc::new(RefCell::new(None));
+        let closures: DragClosures = Rc::new(RefCell::new(None));
 
         let closures_for_up = closures.clone();
         let doc_for_up = document.clone();
